@@ -1,0 +1,52 @@
+# Bazel config for testing tensorflow CPU on RBE.
+# try-import %workspace%/.bazelrc
+
+startup --host_jvm_args=-Dbazel.DigestFunction=SHA256
+
+build --announce_rc
+build --experimental_strict_action_env=true
+build --keep_going
+build --verbose_failures=true
+
+build --action_env=TF_NEED_GCP=0
+build --action_env=TF_NEED_HDFS=0
+build --action_env=TF_NEED_CUDA=0
+#build --action_env=PYTHON_BIN_PATH=/opt/python3.6/bin/python3
+build --action_env=TF_PYTHON_CONFIG_REPO=@org_tensorflow//third_party/toolchains/cpus/py
+build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+build --crosstool_top=//third_party/toolchains/preconfig/ubuntu16.04/clang:toolchain
+build --host_javabase=@bazel_toolchains//configs/ubuntu16_04_clang/1.1:jdk8
+build --javabase=@bazel_toolchains//configs/ubuntu16_04_clang/1.1:jdk8
+build --host_java_toolchain=@bazel_tools//tools/jdk:toolchain_hostjdk8
+build --java_toolchain=@bazel_tools//tools/jdk:toolchain_hostjdk8
+build --extra_toolchains=//third_party/toolchains/preconfig/ubuntu16.04/clang:cc-toolchain-k8
+build --extra_execution_platforms=@org_tensorflow//third_party/toolchains:rbe_ubuntu16.04
+build --host_platform=@org_tensorflow//third_party/toolchains:rbe_ubuntu16.04
+build --platforms=@org_tensorflow//third_party/toolchains:rbe_ubuntu16.04
+build:remote --remote_accept_cached=true
+build:remote --remote_local_fallback=false
+build:remote --spawn_strategy=remote
+build:remote --strategy=Genrule=remote
+build:remote --strategy=Javac=remote
+build:remote --strategy=Closure=remote
+build:remote --define=EXECUTOR=remote
+build:remote --auth_enabled=true
+build:remote --auth_credentials=/tmp/dev-foundry.json
+build:remote --tls_enabled=true
+build:remote --remote_cache=remotebuildexecution.googleapis.com
+build:remote --remote_executor=remotebuildexecution.googleapis.com
+build:remote --genrule_strategy=remote
+build:remote --remote_instance_name=projects/rbe-prod-demo/instances/default_instance
+build:remote --remote_timeout=3600
+build:remote --jobs=200
+build:remote --distinct_host_configuration=false
+
+test --test_env=USER=anon
+test --test_tag_filters=-no_oss,-oss_serial,-gpu,-benchmark-test
+test --test_lang_filters=py
+test --build_tests_only
+test --test_output=errors
+test --test_size_filters=small,medium
+test --test_timeout=300,450,1200,3600
+
+# bazel --bazelrc=.bazelrc.rbe.cpu test --config=remote -- //tensorflow/... -//tensorflow/lite/... -//tensorflow/contrib/...
