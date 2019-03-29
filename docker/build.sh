@@ -92,7 +92,7 @@ do
   log_message "Start building TensorFlow $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
   unbuffer bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" test --config=remote \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
-    --jobs="$NUM_OF_JOBS" "$AUTH_CREDENTIALS" \
+    --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \
     --cache_test_results="$CACHE_TEST_RESULTS" \
     --remote_instance_name="$PROJECT_ID/$INSTANCE_NAME" \
     -- //tensorflow/... -//tensorflow/lite/... -//tensorflow/contrib/... \
