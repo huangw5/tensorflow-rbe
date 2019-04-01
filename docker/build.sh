@@ -70,6 +70,10 @@ function randomly_modify_files() {
   log_message "Randomly modified $NUM_OF_MODIFIES files"
 }
 
+# Use GOOGLE_APPLICATION_CREDENTIALS to generate the git credentials in order to
+# access Google Source Repo.
+python /git_cookie_daemon.py --configure-git
+
 git clone "$TF_REPO" tensorflow
 cd tensorflow
 if [ -n "$TF_COMMIT" ]; then
