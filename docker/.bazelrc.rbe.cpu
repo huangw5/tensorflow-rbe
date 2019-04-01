@@ -38,7 +38,7 @@ build:remote --remote_executor=remotebuildexecution.googleapis.com
 build:remote --genrule_strategy=remote
 build:remote --remote_instance_name=projects/rbe-prod-demo/instances/default_instance
 build:remote --remote_timeout=3600
-build:remote --jobs=400
+build:remote --jobs=200
 build:remote --distinct_host_configuration=false
 
 test --test_env=USER=anon
