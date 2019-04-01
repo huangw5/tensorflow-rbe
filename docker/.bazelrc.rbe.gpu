@@ -48,7 +48,7 @@ build:remote --strategy=TestRunner=remote
 build:remote --strategy=Genrule=remote
 build:remote --genrule_strategy=remote
 build:remote --remote_instance_name=projects/rbe-prod-demo/instances/default_instance
-build:remote --jobs=200
+build:remote --jobs=400
 build:remote --auth_credentials=/tmp/dev-foundry.json
 build:remote --tls_enabled=true
 build:remote --distinct_host_configuration=false
