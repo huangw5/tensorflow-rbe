@@ -36,6 +36,7 @@ RUN pip install keras_applications==1.0.4 --no-deps && \
     pip install portpicker && \
     pip install scipy && \
     pip install oauth2client && \
+    pip install google-cloud-monitoring && \
     pip3 install keras_applications==1.0.4 --no-deps && \
     pip3 install keras_preprocessing==1.0.2 --no-deps && \
     pip3 install h5py==2.8.0 && \
@@ -53,4 +54,5 @@ COPY .bazelrc.rbe.cpu /.bazelrc.rbe.cpu
 COPY build.sh /build.sh
 RUN chmod +x /build.sh
 COPY git_cookie_daemon.py /git_cookie_daemon.py
+COPY send_build_stats.py /send_build_stats.py
 WORKDIR /tf

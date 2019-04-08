@@ -22,6 +22,9 @@ function get_metadata() {
 [ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=$(get_metadata "attributes/cache_test_results")
 [ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=true
 
+[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=$(get_metadata "attributes/clean_local_cache")
+[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=false
+
 [ -z "$BUILD_TYPE" ] && BUILD_TYPE=$(get_metadata "attributes/build_type")
 [ -z "$BUILD_TYPE" ] && BUILD_TYPE="cpu"
 
@@ -93,6 +96,10 @@ fi
 for ((i=0;i<$NUM_OF_RUNS;i++))
 do
   randomly_modify_files
+  if $clean_local_cache; then
+    log_message "Running bazel clean"
+    bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" clean
+  fi
   log_message "Start building TensorFlow $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
   unbuffer bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" test --config=remote \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
@@ -104,7 +111,7 @@ do
     | tee "$BUILD_LOG"
   log_message "Finished building $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
 
-  if [ $i -eq 0 ]; then
+  if [[ $i -eq 0 ]] || $clean_local_cache; then
     local_cache=false
   else
     local_cache=true
@@ -121,5 +128,32 @@ do
   if [ -z "$actions" ]; then
     actions=0
   fi
-  echo '{ "local_cache": "'$local_cache'", "duration": "'$duration'", "actions": "'$actions'", "build_type": "'$BUILD_TYPE'", "remote_accept_cached": "'$REMOTE_ACCEPT_CACHED'", "num_of_modifies": "'$NUM_OF_MODIFIES'", "success": "'$success'", "critical": "'$critical'" }' >> "$STACKDRIVER_LOG_FILE"
+  echo '{ "local_cache": "'$local_cache'", "duration": "'$duration'", "actions": "'$actions'", "build_type": "'$BUILD_TYPE'", "remote_accept_cached": "'$REMOTE_ACCEPT_CACHED'", "num_of_modifies": "'$NUM_OF_MODIFIES'", "success": "'$success'", "critical": "'$critical'", "cache_test_results": "'$CACHE_TEST_RESULTS'" }' >> "$STACKDRIVER_LOG_FILE"
+  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
+    --build_type=$BUILD_TYPE \
+    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
+    --cache_test_results=$CACHE_TEST_RESULTS \
+    --local_cache=$local_cache \
+    --key=duration --value=$duration
+
+  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
+    --build_type=$BUILD_TYPE \
+    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
+    --cache_test_results=$CACHE_TEST_RESULTS \
+    --local_cache=$local_cache \
+    --key=critical --value=$critical
+
+  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
+    --build_type=$BUILD_TYPE \
+    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
+    --cache_test_results=$CACHE_TEST_RESULTS \
+    --local_cache=$local_cache \
+    --key=actions --value=$actions
+
+  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
+    --build_type=$BUILD_TYPE \
+    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
+    --cache_test_results=$CACHE_TEST_RESULTS \
+    --local_cache=$local_cache \
+    --key=build --value=1
 done
