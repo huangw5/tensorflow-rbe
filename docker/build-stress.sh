@@ -1,4 +1,6 @@
 #!/bin/bash
+#
+# This script builds https://github.com/werkt/bazel-stress
 
 set -x
 
@@ -23,24 +25,19 @@ function get_metadata() {
 [ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=true
 
 [ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=$(get_metadata "attributes/clean_local_cache")
-[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=false
-
-[ -z "$BUILD_TYPE" ] && BUILD_TYPE=$(get_metadata "attributes/build_type")
-[ -z "$BUILD_TYPE" ] && BUILD_TYPE="cpu"
+[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=true
 
 [ -z "$NUM_OF_RUNS" ] && NUM_OF_RUNS=$(get_metadata "attributes/num_of_runs")
 [ -z "$NUM_OF_RUNS" ] && NUM_OF_RUNS=1
 
-[ -z "$NUM_OF_MODIFIES" ] && NUM_OF_MODIFIES=$(get_metadata "attributes/num_of_modifies")
-[ -z "$NUM_OF_MODIFIES" ] && NUM_OF_MODIFIES=0
-
 [ -z "$NUM_OF_JOBS" ] && NUM_OF_JOBS=$(get_metadata "attributes/num_of_jobs")
 [ -z "$NUM_OF_JOBS" ] && NUM_OF_JOBS=500
 
-[ -z "$TF_COMMIT" ] && TF_COMMIT=$(get_metadata "attributes/tf_commit")
+[ -z "$SHAMT" ] && SHAMT=$(get_metadata "attributes/shamt")
+[ -z "$SHAMT" ] && SHAMT=7
 
-[ -z "$REPO" ] && REPO=$(get_metadata "attributes/tf_repo")
-[ -z "$REPO" ] && REPO="https://github.com/tensorflow/tensorflow.git"
+[ -z "$DESIRED_TARGETS" ] && DESIRED_TARGETS=$(get_metadata "attributes/desired_targets")
+[ -z "$DESIRED_TARGETS" ] && DESIRED_TARGETS=100000
 
 [ -z "$STACKDRIVER_LOG_FILE" ] && STACKDRIVER_LOG_FILE=/tmp/bazel-tf-log.log
 
@@ -48,6 +45,7 @@ if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
   AUTH_CREDENTIALS=" --auth_credentials=$GOOGLE_APPLICATION_CREDENTIALS "
 fi
 
+REPO=https://github.com/werkt/bazel-stress.git
 
 BUILD_LOG=/tmp/build.log
 
@@ -57,61 +55,46 @@ function log_message() {
   echo "[$(date)] $msg"
 }
 
-function randomly_modify_files() {
-  N=$((NUM_OF_MODIFIES/2))
-  for f in $(find . -name *.cc | shuf | head -n $N);
-  do
-    sed -i "1s/^/\/\/ Random string: $(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 32)\n/" "$f"
-    echo "$f"
-  done
-
-  N=$((NUM_OF_MODIFIES-N))
-  for f in $(find . -name *.py | shuf | head -n $N);
-  do
-    sed -i "1s/^/# Random string: $(cat /dev/urandom | tr -cd 'a-f0-9' | head -c 32)\n/" "$f"
-  done
-  log_message "Randomly modified $NUM_OF_MODIFIES files"
-}
-
 # Use GOOGLE_APPLICATION_CREDENTIALS to generate the git credentials in order to
 # access Google Source Repo.
 python /git_cookie_daemon.py --configure-git
 
-git clone "$REPO" tensorflow
-cd tensorflow
-if [ -n "$TF_COMMIT" ]; then
-  git reset --hard "$TF_COMMIT"
-fi
+git clone "$REPO" bazel-stress
+cd bazel-stress
 
-if [ "$BUILD_TYPE" = "cpu" ]; then
-  # Run configure.
-  export TF_NEED_GCP=0
-  export TF_NEED_HDFS=0
-  export TF_NEED_CUDA=0
-  # PYTHON_BIN_PATH must be set to path of python in exec container
-  export PYTHON_BIN_PATH="/usr/bin/python"
-  yes "" | ./configure
-fi
+cat <<"EOF" >> WORKSPACE
+http_archive(
+  name = "bazel_toolchains",
+  sha256 = "67335b3563d9b67dc2550b8f27cc689b64fadac491e69ce78763d9ba894cc5cc",
+  strip_prefix = "bazel-toolchains-cddc376d428ada2927ad359211c3e356bd9c9fbb",
+  urls = [
+    "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/cddc376d428ada2927ad359211c3e356bd9c9fb
+b.tar.gz",
+    "https://github.com/bazelbuild/bazel-toolchains/archive/cddc376d428ada2927ad359211c3e356bd9c9fbb.tar.gz",
+  ],
+)
+EOF
+
+# Generate BUILD file.
+bazel run tools:gen -- $SHAMT $DESIRED_TARGETS > BUILD
 
 for ((i=0;i<$NUM_OF_RUNS;i++))
 do
-  randomly_modify_files
-  if $clean_local_cache; then
+  if $CLEAN_LOCAL_CACHE; then
     log_message "Running bazel clean"
-    bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" clean
+    bazel --bazelrc=/.bazelrc.stress clean
   fi
-  log_message "Start building TensorFlow $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
-  unbuffer bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" test --config=remote \
+  log_message "Start building (run $((i+1)) / $NUM_OF_RUNS)"
+  unbuffer bazel --bazelrc=/.bazelrc.stress build \
+    --config=remote \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
     --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \
     --cache_test_results="$CACHE_TEST_RESULTS" \
     --remote_instance_name="$PROJECT_ID/$INSTANCE_NAME" \
-    -- //tensorflow/... -//tensorflow/lite/... -//tensorflow/contrib/... \
-    -//tensorflow/compiler/tests:fft_test_cpu \
-    | tee "$BUILD_LOG"
-  log_message "Finished building $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
+    :all | tee "$BUILD_LOG"
+  log_message "Finished (run $((i+1)) / $NUM_OF_RUNS)"
 
-  if [[ $i -eq 0 ]] || $clean_local_cache; then
+  if [[ $i -eq 0 ]] || $CLEAN_LOCAL_CACHE; then
     local_cache=false
   else
     local_cache=true
@@ -128,13 +111,16 @@ do
   if [ -z "$actions" ]; then
     actions=0
   fi
-  echo '{ "local_cache": "'$local_cache'", "duration": "'$duration'", "actions": "'$actions'", "build_type": "'$BUILD_TYPE'", "remote_accept_cached": "'$REMOTE_ACCEPT_CACHED'", "num_of_modifies": "'$NUM_OF_MODIFIES'", "success": "'$success'", "critical": "'$critical'", "cache_test_results": "'$CACHE_TEST_RESULTS'" }' >> "$STACKDRIVER_LOG_FILE"
+  echo '{ "local_cache": "'$local_cache'", "duration": "'$duration'", "actions": "'$actions'", "build_type": "'$BUILD_TYPE'", "remote_accept_cached": "'$REMOTE_ACCEPT_CACHED'", "num_of_modifies": "'$NUM_OF_MODIFIES'", "success": "'$success'", "critical": "'$critical'", "clean_local_cache": "'$CLEAN_LOCAL_CACHE'", "cache_test_results": "'$CACHE_TEST_RESULTS'", "repo": "'$REPO'" }' >> "$STACKDRIVER_LOG_FILE"
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
     --build_type=$BUILD_TYPE \
     --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --shamt=$SHAMT \
+    --desired_targets=$DESIRED_TARGETS \
+    --clean_local_cache=$CLEAN_LOCAL_CACHE \
     --key=duration --value=$duration
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -143,6 +129,9 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --shamt=$SHAMT \
+    --desired_targets=$DESIRED_TARGETS \
+    --clean_local_cache=$CLEAN_LOCAL_CACHE \
     --key=critical --value=$critical
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -151,6 +140,9 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --shamt=$SHAMT \
+    --desired_targets=$DESIRED_TARGETS \
+    --clean_local_cache=$CLEAN_LOCAL_CACHE \
     --key=actions --value=$actions
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -159,5 +151,9 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --shamt=$SHAMT \
+    --desired_targets=$DESIRED_TARGETS \
+    --clean_local_cache=$CLEAN_LOCAL_CACHE \
     --key=build --value=1
 done
+
