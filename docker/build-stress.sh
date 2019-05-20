@@ -19,7 +19,7 @@ function get_metadata() {
 [ -z "$INSTANCE_NAME" ] && INSTANCE_NAME="instances/default_instance"
 
 [ -z "$REMOTE_ACCEPT_CACHED" ] && REMOTE_ACCEPT_CACHED=$(get_metadata "attributes/remote_accept_cached")
-[ -z "$REMOTE_ACCEPT_CACHED" ] && REMOTE_ACCEPT_CACHED=true
+[ -z "$REMOTE_ACCEPT_CACHED" ] && REMOTE_ACCEPT_CACHED=false
 
 [ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=$(get_metadata "attributes/cache_test_results")
 [ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=true
@@ -62,18 +62,28 @@ python /git_cookie_daemon.py --configure-git
 git clone "$REPO" bazel-stress
 cd bazel-stress
 
+# Setup the WORKSPACE.
 cat <<"EOF" >> WORKSPACE
 http_archive(
-  name = "bazel_toolchains",
-  sha256 = "67335b3563d9b67dc2550b8f27cc689b64fadac491e69ce78763d9ba894cc5cc",
-  strip_prefix = "bazel-toolchains-cddc376d428ada2927ad359211c3e356bd9c9fbb",
-  urls = [
-    "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/cddc376d428ada2927ad359211c3e356bd9c9fb
-b.tar.gz",
-    "https://github.com/bazelbuild/bazel-toolchains/archive/cddc376d428ada2927ad359211c3e356bd9c9fbb.tar.gz",
-  ],
+    name = "bazel_toolchains",
+    sha256 = "36e5cb9f15543faa195daa9ee9c8a7f0306f6b4f3e407ffcdb9410884d9ac4de",
+    strip_prefix = "bazel-toolchains-0.25.0",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/archive/0.25.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-toolchains/archive/0.25.0.tar.gz",
+    ],
 )
+
+load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
+
+# Creates a default toolchain config for RBE.
+# Use this as is if you are using the rbe_ubuntu16_04 container,
+# otherwise refer to RBE docs.
+rbe_autoconfig(name = "rbe_default")
 EOF
+
+# Fetch the bazelrc.
+curl -LO https://raw.githubusercontent.com/bazelbuild/bazel-toolchains/master/bazelrc/.bazelrc
 
 # Generate BUILD file.
 bazel run tools:gen -- $SHAMT $DESIRED_TARGETS > BUILD
@@ -82,10 +92,10 @@ for ((i=0;i<$NUM_OF_RUNS;i++))
 do
   if $CLEAN_LOCAL_CACHE; then
     log_message "Running bazel clean"
-    bazel --bazelrc=/.bazelrc.stress clean
+    bazel clean
   fi
   log_message "Start building (run $((i+1)) / $NUM_OF_RUNS)"
-  unbuffer bazel --bazelrc=/.bazelrc.stress build \
+  unbuffer bazel build \
     --config=remote \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
     --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \

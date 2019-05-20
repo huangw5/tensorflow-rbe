@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-ARG BAZEL_VERSION=0.23.2
+ARG BAZEL_VERSION=0.24.1
 
 # This is needed to avoid user interaction when installing expect.
 ENV DEBIAN_FRONTEND=noninteractive
@@ -21,7 +21,9 @@ RUN apt-get install -y --no-install-recommends \
       curl \
       vim \
       expect \
-      tcl8.6
+      tcl8.6 \
+      ruby \
+      gcc
 
 RUN wget -q https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-linux-x86_64 \
   && mv bazel-$BAZEL_VERSION-linux-x86_64 /usr/bin/bazel \
@@ -52,7 +54,8 @@ RUN mkdir -p /opt/python3.6/bin/ && ln -s /usr/bin/python3 /opt/python3.6/bin/py
 COPY .bazelrc.rbe.gpu /.bazelrc.rbe.gpu
 COPY .bazelrc.rbe.cpu /.bazelrc.rbe.cpu
 COPY build.sh /build.sh
-RUN chmod +x /build.sh
+COPY build-stress.sh /build-stress.sh
+RUN chmod +x /*.sh
 COPY git_cookie_daemon.py /git_cookie_daemon.py
 COPY send_build_stats.py /send_build_stats.py
 WORKDIR /tf
