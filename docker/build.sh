@@ -102,6 +102,7 @@ do
   fi
   log_message "Start building TensorFlow $BUILD_TYPE (run $((i+1)) / $NUM_OF_RUNS)"
   unbuffer bazel --bazelrc=/.bazelrc.rbe."$BUILD_TYPE" test --config=remote \
+    --keep_going \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
     --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \
     --cache_test_results="$CACHE_TEST_RESULTS" \
@@ -135,6 +136,7 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --success=$success \
     --key=duration --value=$duration
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -143,6 +145,7 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --success=$success \
     --key=critical --value=$critical
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -151,6 +154,7 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --success=$success \
     --key=actions --value=$actions
 
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
@@ -159,5 +163,6 @@ do
     --cache_test_results=$CACHE_TEST_RESULTS \
     --local_cache=$local_cache \
     --repo=$REPO \
+    --success=$success \
     --key=build --value=1
 done

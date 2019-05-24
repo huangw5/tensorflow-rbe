@@ -23,7 +23,8 @@ RUN apt-get install -y --no-install-recommends \
       expect \
       tcl8.6 \
       ruby \
-      gcc
+      gcc \
+      g++
 
 RUN wget -q https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-linux-x86_64 \
   && mv bazel-$BAZEL_VERSION-linux-x86_64 /usr/bin/bazel \

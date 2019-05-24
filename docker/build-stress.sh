@@ -73,17 +73,18 @@ http_archive(
         "https://github.com/bazelbuild/bazel-toolchains/archive/0.25.0.tar.gz",
     ],
 )
-
-load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
-
-# Creates a default toolchain config for RBE.
-# Use this as is if you are using the rbe_ubuntu16_04 container,
-# otherwise refer to RBE docs.
-rbe_autoconfig(name = "rbe_default")
 EOF
 
-# Fetch the bazelrc.
-curl -LO https://raw.githubusercontent.com/bazelbuild/bazel-toolchains/master/bazelrc/.bazelrc
+# Configure bazelrc.
+curl -LO https://raw.githubusercontent.com/bazelbuild/bazel-toolchains/master/bazelrc/bazel-0.25.0.bazelrc
+cat <<"EOF" >> .bazelrc
+import %workspace%/bazel-0.25.0.bazelrc
+
+build:remote --remote_instance_name=projects/rbe-prod-demo/instances/default_instance
+build:remote --remote_accept_cached=false
+build:remote --jobs=2000
+EOF
+
 
 # Generate BUILD file.
 bazel run tools:gen -- $SHAMT $DESIRED_TARGETS > BUILD
@@ -96,7 +97,9 @@ do
   fi
   log_message "Start building (run $((i+1)) / $NUM_OF_RUNS)"
   unbuffer bazel build \
+    --keep_going \
     --config=remote \
+    --loading_phase_threads=HOST_CPUS \
     --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
     --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \
     --cache_test_results="$CACHE_TEST_RESULTS" \
@@ -110,7 +113,7 @@ do
     local_cache=true
   fi
   # Extract the build stats.
-  if cat "$BUILD_LOG" | grep 'FAILED: Build did NOT complete successfully' > /dev/null; then
+  if cat "$BUILD_LOG" | grep 'Build did NOT complete successfully' > /dev/null; then
     success=false
   else
     success=true
@@ -131,39 +134,7 @@ do
     --shamt=$SHAMT \
     --desired_targets=$DESIRED_TARGETS \
     --clean_local_cache=$CLEAN_LOCAL_CACHE \
+    --success=$success \
     --key=duration --value=$duration
-
-  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
-    --build_type=$BUILD_TYPE \
-    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
-    --cache_test_results=$CACHE_TEST_RESULTS \
-    --local_cache=$local_cache \
-    --repo=$REPO \
-    --shamt=$SHAMT \
-    --desired_targets=$DESIRED_TARGETS \
-    --clean_local_cache=$CLEAN_LOCAL_CACHE \
-    --key=critical --value=$critical
-
-  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
-    --build_type=$BUILD_TYPE \
-    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
-    --cache_test_results=$CACHE_TEST_RESULTS \
-    --local_cache=$local_cache \
-    --repo=$REPO \
-    --shamt=$SHAMT \
-    --desired_targets=$DESIRED_TARGETS \
-    --clean_local_cache=$CLEAN_LOCAL_CACHE \
-    --key=actions --value=$actions
-
-  python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
-    --build_type=$BUILD_TYPE \
-    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
-    --cache_test_results=$CACHE_TEST_RESULTS \
-    --local_cache=$local_cache \
-    --repo=$REPO \
-    --shamt=$SHAMT \
-    --desired_targets=$DESIRED_TARGETS \
-    --clean_local_cache=$CLEAN_LOCAL_CACHE \
-    --key=build --value=1
 done
 
