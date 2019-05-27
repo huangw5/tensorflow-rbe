@@ -1,5 +1,8 @@
 This repo contains the Bazel configurations for building TensorFlow CPU/GPU.
 
+NOTE: Your RBE workers will need access to TensorFlow's
+[docker images](https://github.com/tensorflow/tensorflow/blob/master/third_party/toolchains/BUILD).
+
 # Build docker container
 
 ```
@@ -57,8 +60,8 @@ export TF_NEED_CUDA=0
 export PYTHON_BIN_PATH="/usr/bin/python"
 yes "" | ./configure
 
-# Call bazel with the provided
-[bazelrc](https://github.com/huangw5/tensorflow-rbe/blob/master/docker/.bazelrc.rbe.cpu).
+# Call bazel with the provided bazelrc:
+# https://github.com/huangw5/tensorflow-rbe/blob/master/docker/.bazelrc.rbe.cpu
 
 bazel --bazelrc=/.bazelrc.rbe.cpu test --config=remote \
   --remote_instance_name=projects/your_rbe_project/instances/your_rbe_istance \
