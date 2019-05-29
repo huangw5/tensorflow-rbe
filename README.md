@@ -6,8 +6,9 @@ NOTE: Your RBE workers will need access to TensorFlow's
 # Build docker container
 
 ```
-cd docker
-docker build  --tag "tf-rbe" .
+git clone https://github.com/huangw5/tensorflow-rbe.git
+cd tensorflow-rbe/docker
+docker build --tag "bazel-rbe" .
 ```
 
 # Kick off TensorFlow CPU (py2) builds/tests
@@ -18,7 +19,7 @@ docker run --rm -it -e BUILD_TYPE=cpu \
   -e INSTANCE_NAME=instances/your_rbe_instance_name \
   -e GOOGLE_APPLICATION_CREDENTIALS=/path/to/rbe_credentials.json \
   -v /path/to/rbe_credentials.json:/path/to/rbe_credentials.json \
-  tf-rbe:latest /build.sh
+  bazel-rbe:latest /build.sh
 ```
 
 # Kick off TensorFlow GPU (py3) builds/tests
@@ -29,7 +30,7 @@ docker run --rm -it -e BUILD_TYPE=gpu \
   -e INSTANCE_NAME=instances/your_rbe_instance_name \
   -e GOOGLE_APPLICATION_CREDENTIALS=/path/to/rbe_credentials.json \
   -v /path/to/rbe_credentials.json:/path/to/rbe_credentials.json \
-  tf-rbe:latest /build.sh
+  bazel-rbe:latest /build.sh
 ```
 
 See all other variables in `build.sh`.
@@ -42,7 +43,7 @@ First start the container in interactive mode:
 docker run --rm -it \
   -e GOOGLE_APPLICATION_CREDENTIALS=/path/to/rbe_credentials.json \
   -v /path/to/rbe_credentials.json:/path/to/rbe_credentials.json \
-  tf-rbe:latest bash
+  bazel-rbe:latest bash
 ```
 
 Then inside the container:

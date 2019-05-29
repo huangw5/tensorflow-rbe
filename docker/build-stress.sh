@@ -18,15 +18,6 @@ function get_metadata() {
 [ -z "$INSTANCE_NAME" ] && INSTANCE_NAME=$(get_metadata "attributes/instance_name")
 [ -z "$INSTANCE_NAME" ] && INSTANCE_NAME="instances/default_instance"
 
-[ -z "$REMOTE_ACCEPT_CACHED" ] && REMOTE_ACCEPT_CACHED=$(get_metadata "attributes/remote_accept_cached")
-[ -z "$REMOTE_ACCEPT_CACHED" ] && REMOTE_ACCEPT_CACHED=false
-
-[ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=$(get_metadata "attributes/cache_test_results")
-[ -z "$CACHE_TEST_RESULTS" ] && CACHE_TEST_RESULTS=true
-
-[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=$(get_metadata "attributes/clean_local_cache")
-[ -z "$CLEAN_LOCAL_CACHE" ] && CLEAN_LOCAL_CACHE=true
-
 [ -z "$NUM_OF_RUNS" ] && NUM_OF_RUNS=$(get_metadata "attributes/num_of_runs")
 [ -z "$NUM_OF_RUNS" ] && NUM_OF_RUNS=1
 
@@ -39,8 +30,6 @@ function get_metadata() {
 [ -z "$DESIRED_TARGETS" ] && DESIRED_TARGETS=$(get_metadata "attributes/desired_targets")
 [ -z "$DESIRED_TARGETS" ] && DESIRED_TARGETS=100000
 
-[ -z "$STACKDRIVER_LOG_FILE" ] && STACKDRIVER_LOG_FILE=/tmp/bazel-tf-log.log
-
 if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
   AUTH_CREDENTIALS=" --auth_credentials=$GOOGLE_APPLICATION_CREDENTIALS "
 fi
@@ -50,14 +39,8 @@ REPO=https://github.com/werkt/bazel-stress.git
 BUILD_LOG=/tmp/build.log
 
 function log_message() {
-  msg="$@"
-  echo '{"message": "'$msg'"}' >> "$STACKDRIVER_LOG_FILE"
-  echo "[$(date)] $msg"
+  echo "[$(date)] $@"
 }
-
-# Use GOOGLE_APPLICATION_CREDENTIALS to generate the git credentials in order to
-# access Google Source Repo.
-python /git_cookie_daemon.py --configure-git
 
 git clone "$REPO" bazel-stress
 cd bazel-stress
@@ -82,7 +65,6 @@ import %workspace%/bazel-0.25.0.bazelrc
 
 build:remote --remote_instance_name=projects/rbe-prod-demo/instances/default_instance
 build:remote --remote_accept_cached=false
-build:remote --jobs=2000
 EOF
 
 
@@ -91,27 +73,18 @@ bazel run tools:gen -- $SHAMT $DESIRED_TARGETS > BUILD
 
 for ((i=0;i<$NUM_OF_RUNS;i++))
 do
-  if $CLEAN_LOCAL_CACHE; then
-    log_message "Running bazel clean"
-    bazel clean
-  fi
+  log_message "Running bazel clean"
+  bazel clean
   log_message "Start building (run $((i+1)) / $NUM_OF_RUNS)"
   unbuffer bazel build \
     --keep_going \
     --config=remote \
     --loading_phase_threads=HOST_CPUS \
-    --remote_accept_cached="$REMOTE_ACCEPT_CACHED" \
     --jobs="$NUM_OF_JOBS" ${AUTH_CREDENTIALS} \
-    --cache_test_results="$CACHE_TEST_RESULTS" \
     --remote_instance_name="$PROJECT_ID/$INSTANCE_NAME" \
     :all | tee "$BUILD_LOG"
   log_message "Finished (run $((i+1)) / $NUM_OF_RUNS)"
 
-  if [[ $i -eq 0 ]] || $CLEAN_LOCAL_CACHE; then
-    local_cache=false
-  else
-    local_cache=true
-  fi
   # Extract the build stats.
   if cat "$BUILD_LOG" | grep 'Build did NOT complete successfully' > /dev/null; then
     success=false
@@ -124,17 +97,12 @@ do
   if [ -z "$actions" ]; then
     actions=0
   fi
-  echo '{ "local_cache": "'$local_cache'", "duration": "'$duration'", "actions": "'$actions'", "build_type": "'$BUILD_TYPE'", "remote_accept_cached": "'$REMOTE_ACCEPT_CACHED'", "num_of_modifies": "'$NUM_OF_MODIFIES'", "success": "'$success'", "critical": "'$critical'", "clean_local_cache": "'$CLEAN_LOCAL_CACHE'", "cache_test_results": "'$CACHE_TEST_RESULTS'", "repo": "'$REPO'" }' >> "$STACKDRIVER_LOG_FILE"
+  log_message "duration: $duration, actions: $actions, success: $success, critical: $critical, repo: $REPO"
+  # Send the duration to GCP custom metric.
   python /send_build_stats.py --project_id=$(basename $PROJECT_ID) \
-    --build_type=$BUILD_TYPE \
-    --remote_accept_cached=$REMOTE_ACCEPT_CACHED \
-    --cache_test_results=$CACHE_TEST_RESULTS \
-    --local_cache=$local_cache \
     --repo=$REPO \
     --shamt=$SHAMT \
     --desired_targets=$DESIRED_TARGETS \
-    --clean_local_cache=$CLEAN_LOCAL_CACHE \
     --success=$success \
     --key=duration --value=$duration
 done
-
