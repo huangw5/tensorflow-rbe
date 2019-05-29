@@ -118,7 +118,7 @@ The page looks like the following:
     https://console.cloud.google.com/compute/instanceTemplates/details/bazel-stress-builders-200-jobs.
 2.  Click "CREATE INSTANCE GROUP" on the top.
 3.  Put a name for the MIG in "Name" section, e.g. `bazel-stress-builders`.
-4.  Select a "Zone" in `us-central1`, e.g. `us-entral1-a`.
+4.  Select a "Zone" in `us-central1`, e.g. `us-central1-a`.
 5.  Set "Autoscaling" to `off`.
 6.  Set "Number of instances" to the number of builders you desire, e.g. 50.
 7.  Click "Create".
